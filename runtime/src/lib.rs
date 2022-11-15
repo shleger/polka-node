@@ -112,6 +112,26 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	state_version: 1,
 };
 
+/// The version information used to identify this runtime when compiled natively.
+#[cfg(feature = "std")]
+pub fn native_version() -> NativeVersion {
+	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
+}
+
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+
+/// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
+/// This is used to limit the maximal weight of a single extrinsic.
+const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
+
+
+/// We allow for 2 seconds of compute with a 6 second average block time.
+const MAXIMUM_BLOCK_WEIGHT: Weight = WEIGHT_PER_SECOND.saturating_mul(2);
+
+// Prints debug output of the `contracts` pallet to stdout if the node is
+// started with `-lruntime::contracts=debug`.
+const CONTRACTS_DEBUG_OUTPUT: bool = true;
+
 /// This determines the average expected block time that we are targeting.
 /// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 /// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
@@ -120,16 +140,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 /// Change this to adjust the block time.
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
-// Prints debug output of the `contracts` pallet to stdout if the node is
-// started with `-lruntime::contracts=debug`.
-const CONTRACTS_DEBUG_OUTPUT: bool = true;
-
-/// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
-/// This is used to limit the maximal weight of a single extrinsic.
-const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
-
-/// We allow for 2 seconds of compute with a 6 second average block time.
-const MAXIMUM_BLOCK_WEIGHT: Weight = WEIGHT_PER_SECOND.saturating_mul(2);
 
 // NOTE: Currently it is not possible to change the slot duration after the chain has started.
 //       Attempting to do so will brick block production.
@@ -140,13 +150,9 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
-/// The version information used to identify this runtime when compiled natively.
-#[cfg(feature = "std")]
-pub fn native_version() -> NativeVersion {
-	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
+const fn deposit(items: u32, bytes: u32) -> Balance {
+	(items as Balance * UNIT + (bytes as Balance) * (5 * MILLIUNIT / 100)) / 10
 }
-
-const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -231,7 +237,27 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
+}
+
+parameter_types! {
+	pub const UncleGenerations: u32 = 0;
+}
+
+/// Configure the pallet-template in pallets/template.
+impl pallet_template::Config for Runtime {
+	type Event = Event;
+}
+
+parameter_types! {
+	pub const MaxLocks: u32 = 50;
+}
+
+impl pallet_authorship::Config for Runtime {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ();
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
@@ -315,8 +341,9 @@ pub const EXISTENTIAL_DEPOSIT: u128 = 500;
 const UNIT: Balance = 1_000_000_000_000;
 const MILLIUNIT: Balance = 1_000_000_000;
 
-const fn deposit(items: u32, bytes: u32) -> Balance {
-	(items as Balance * UNIT + (bytes as Balance) * (5 * MILLIUNIT / 100)) / 10
+
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
 }
 
 parameter_types! {
@@ -360,10 +387,7 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-/// Configure the pallet-template in pallets/template.
-impl pallet_template::Config for Runtime {
-	type Event = Event;
-}
+
 
 pub struct Migrations;
 impl OnRuntimeUpgrade for Migrations {
@@ -384,6 +408,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
 		Timestamp: pallet_timestamp,
 		Aura: pallet_aura,
+		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,

@@ -3816,6 +3816,7 @@ dependencies = [
  "frame-try-runtime",
  "hex-literal",
  "pallet-aura",
+ "pallet-authorship",
  "pallet-balances",
  "pallet-contracts",
  "pallet-contracts-primitives",
